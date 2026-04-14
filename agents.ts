@@ -17,6 +17,8 @@ export interface AgentConfig {
 	thinking?: string;
 	maxSubagentDepth?: number;
 	fallbackModels?: string[];
+	dispatch?: string;
+	permissionMode?: string;
 	systemPrompt: string;
 	source: "user" | "project" | "builtin";
 	filePath: string;
@@ -76,6 +78,8 @@ export function loadAgentsFromDir(dir: string, source: "user" | "project" | "bui
 			?.split(",")
 			.map((m: string) => m.trim())
 			.filter(Boolean);
+		const dispatch = frontmatter.dispatch?.trim() || undefined;
+		const permissionMode = frontmatter.permissionMode?.trim() || undefined;
 
 		agents.push({
 			name: frontmatter.name,
@@ -85,6 +89,8 @@ export function loadAgentsFromDir(dir: string, source: "user" | "project" | "bui
 			thinking,
 			maxSubagentDepth,
 			fallbackModels: fallbackModels && fallbackModels.length > 0 ? fallbackModels : undefined,
+			dispatch,
+			permissionMode,
 			systemPrompt: body,
 			source,
 			filePath,

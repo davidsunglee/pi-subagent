@@ -139,6 +139,24 @@ describe("agents", () => {
 			assert.deepEqual(agents[0].fallbackModels, ["claude-haiku-4-5", "gpt-4o-mini"]);
 		});
 
+		it("parses dispatch and permissionMode fields", () => {
+			fs.writeFileSync(path.join(tmpDir, "claude-agent.md"), [
+				"---",
+				"name: claude-agent",
+				"description: Uses Claude dispatch",
+				"dispatch: claude",
+				"permissionMode: plan",
+				"---",
+				"",
+				"You are dispatched via Claude.",
+			].join("\n"));
+
+			const agents = loadAgentsFromDir(tmpDir, "user");
+			assert.equal(agents.length, 1);
+			assert.equal(agents[0].dispatch, "claude");
+			assert.equal(agents[0].permissionMode, "plan");
+		});
+
 		it("returns undefined for absent optional fields", () => {
 			fs.writeFileSync(path.join(tmpDir, "minimal.md"), [
 				"---",
@@ -155,6 +173,8 @@ describe("agents", () => {
 			assert.equal(agents[0].fallbackModels, undefined);
 			assert.equal(agents[0].model, undefined);
 			assert.equal(agents[0].tools, undefined);
+			assert.equal(agents[0].dispatch, undefined);
+			assert.equal(agents[0].permissionMode, undefined);
 		});
 
 		it("skips files without name", () => {
