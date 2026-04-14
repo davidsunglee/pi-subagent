@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { loadAgentsFromDir, getBuiltinAgentsDir } from "../agents.ts";
+import { loadAgentsFromDir, getBuiltinAgentsDir, mergeAgentsByPriority } from "../agents.ts";
+import type { AgentConfig } from "../agents.ts";
 
 describe("agents", () => {
 	let tmpDir: string;
@@ -186,6 +187,101 @@ describe("agents", () => {
 			const dir = getBuiltinAgentsDir();
 			const files = fs.readdirSync(dir).filter(f => f.endsWith(".md")).sort();
 			assert.deepEqual(files, ["planner.md", "reviewer.md", "scout.md", "worker.md"]);
+		});
+	});
+
+	describe("mergeAgentsByPriority", () => {
+		const makeAgent = (name: string, source: "builtin" | "user" | "project"): AgentConfig => ({
+			name,
+			description: `${name} from ${source}`,
+			systemPrompt: "",
+			source,
+			filePath: `/fake/${source}/${name}.md`,
+		});
+
+		it("returns builtin agents when no user or project agents", () => {
+			const builtins = [makeAgent("scout", "builtin"), makeAgent("planner", "builtin")];
+			const result = mergeAgentsByPriority(builtins, [], [], "user");
+			assert.equal(result.length, 2);
+			assert.equal(result[0].source, "builtin");
+		});
+
+		it("user agents override builtins with same name", () => {
+			const builtins = [makeAgent("planner", "builtin")];
+			const users = [makeAgent("planner", "user")];
+			const result = mergeAgentsByPriority(builtins, users, [], "user");
+			assert.equal(result.length, 1);
+			assert.equal(result[0].source, "user");
+			assert.equal(result[0].description, "planner from user");
+		});
+
+		it("project agents override user agents with same name", () => {
+			const users = [makeAgent("planner", "user")];
+			const projects = [makeAgent("planner", "project")];
+			const result = mergeAgentsByPriority([], users, projects, "both");
+			assert.equal(result.length, 1);
+			assert.equal(result[0].source, "project");
+		});
+
+		it("project agents override builtins with same name", () => {
+			const builtins = [makeAgent("planner", "builtin")];
+			const projects = [makeAgent("planner", "project")];
+			const result = mergeAgentsByPriority(builtins, [], projects, "both");
+			assert.equal(result.length, 1);
+			assert.equal(result[0].source, "project");
+		});
+
+		it("non-colliding agents from all tiers are all included", () => {
+			const builtins = [makeAgent("scout", "builtin")];
+			const users = [makeAgent("coder", "user")];
+			const projects = [makeAgent("reviewer", "project")];
+			const result = mergeAgentsByPriority(builtins, users, projects, "both");
+			assert.equal(result.length, 3);
+			const names = result.map(a => a.name).sort();
+			assert.deepEqual(names, ["coder", "reviewer", "scout"]);
+		});
+
+		it("scope 'user' ignores project agents in merge", () => {
+			const builtins = [makeAgent("scout", "builtin")];
+			const users = [makeAgent("coder", "user")];
+			const projects = [makeAgent("reviewer", "project")];
+			const result = mergeAgentsByPriority(builtins, users, projects, "user");
+			// Project agents are passed but scope "user" means they shouldn't override
+			const names = result.map(a => a.name).sort();
+			assert.deepEqual(names, ["coder", "scout"]);
+		});
+
+		it("scope 'project' ignores user agents in merge", () => {
+			const builtins = [makeAgent("scout", "builtin")];
+			const users = [makeAgent("coder", "user")];
+			const projects = [makeAgent("reviewer", "project")];
+			const result = mergeAgentsByPriority(builtins, users, projects, "project");
+			const names = result.map(a => a.name).sort();
+			assert.deepEqual(names, ["reviewer", "scout"]);
+		});
+
+		it("full scenario: 5 user agents override 1 builtin, 3 builtins remain", () => {
+			const builtins = [
+				makeAgent("scout", "builtin"),
+				makeAgent("planner", "builtin"),
+				makeAgent("worker", "builtin"),
+				makeAgent("reviewer", "builtin"),
+			];
+			const users = [
+				makeAgent("planner", "user"),  // overrides builtin
+				makeAgent("coder", "user"),
+				makeAgent("plan-reviewer", "user"),
+				makeAgent("code-reviewer", "user"),
+				makeAgent("code-refiner", "user"),
+			];
+			const result = mergeAgentsByPriority(builtins, users, [], "user");
+			assert.equal(result.length, 8);
+
+			const planner = result.find(a => a.name === "planner");
+			assert.equal(planner?.source, "user"); // user overrides builtin
+
+			const scout = result.find(a => a.name === "scout");
+			assert.equal(scout?.source, "builtin"); // not overridden
 		});
 	});
 });

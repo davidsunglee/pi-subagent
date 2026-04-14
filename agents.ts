@@ -116,16 +116,16 @@ export function getBuiltinAgentsDir(): string {
 	return path.join(path.dirname(thisFile), "agents");
 }
 
-export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-	const builtinDir = getBuiltinAgentsDir();
-	const userDir = path.join(getAgentDir(), "agents");
-	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
-
-	const builtinAgents = loadAgentsFromDir(builtinDir, "builtin");
-	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
-
-	// Priority: builtin (lowest) -> user -> project (highest)
+/**
+ * Merge agents from three tiers with priority: builtin (lowest) -> user -> project (highest).
+ * Later tiers override earlier tiers by name.
+ */
+export function mergeAgentsByPriority(
+	builtinAgents: AgentConfig[],
+	userAgents: AgentConfig[],
+	projectAgents: AgentConfig[],
+	scope: AgentScope,
+): AgentConfig[] {
 	const agentMap = new Map<string, AgentConfig>();
 
 	for (const agent of builtinAgents) agentMap.set(agent.name, agent);
@@ -139,7 +139,22 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 		for (const agent of projectAgents) agentMap.set(agent.name, agent);
 	}
 
-	return { agents: Array.from(agentMap.values()), projectAgentsDir };
+	return Array.from(agentMap.values());
+}
+
+export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+	const builtinDir = getBuiltinAgentsDir();
+	const userDir = path.join(getAgentDir(), "agents");
+	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+
+	const builtinAgents = loadAgentsFromDir(builtinDir, "builtin");
+	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
+	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+
+	return {
+		agents: mergeAgentsByPriority(builtinAgents, userAgents, projectAgents, scope),
+		projectAgentsDir,
+	};
 }
 
 export function formatAgentList(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
