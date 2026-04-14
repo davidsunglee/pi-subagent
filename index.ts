@@ -24,6 +24,7 @@ import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 import { buildAgentArgs } from "./agent-args.js";
+import { buildClaudeArgs, parseClaudeStreamEvent, parseClaudeResult, isValidDispatch, isValidPermissionMode } from "./claude-args.js";
 import { checkDepth, buildChildEnv } from "./depth-guard.js";
 import { withModelFallback } from "./model-fallback.js";
 
@@ -236,6 +237,10 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	return { command: "pi", args };
 }
 
+function getClaudeInvocation(args: string[]): { command: string; args: string[] } {
+	return { command: "claude", args };
+}
+
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
 async function runSingleAgent(
@@ -250,6 +255,8 @@ async function runSingleAgent(
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
 	modelOverride?: string,
 	thinkingOverride?: string,
+	dispatch?: string,
+	permissionMode?: string,
 ): Promise<SingleResult> {
 	const agent = agents.find((a) => a.name === agentName);
 
@@ -281,6 +288,186 @@ async function runSingleAgent(
 		};
 	}
 
+	const effectiveDispatch = dispatch || agent.dispatch || "pi";
+	const effectivePermissionMode = permissionMode || agent.permissionMode || "bypassPermissions";
+
+	if (!isValidDispatch(effectiveDispatch)) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: `Invalid dispatch value: "${effectiveDispatch}". Valid values: pi, claude`,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
+	if (effectiveDispatch === "claude" && !isValidPermissionMode(effectivePermissionMode)) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: `Invalid permissionMode: "${effectivePermissionMode}". Valid values: bypassPermissions, auto, plan`,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
+	if (effectiveDispatch === "claude") {
+		// --- Claude Code dispatch path ---
+		const { args, effectiveModel, error: argsError } = buildClaudeArgs({
+			agentModel: agent.model,
+			agentThinking: agent.thinking,
+			agentTools: agent.tools,
+			modelOverride,
+			thinkingOverride,
+			permissionMode: effectivePermissionMode,
+			systemPrompt: agent.systemPrompt.trim() || undefined,
+		});
+
+		if (argsError) {
+			return {
+				agent: agentName,
+				agentSource: agent.source,
+				task,
+				exitCode: 1,
+				messages: [],
+				stderr: argsError,
+				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+				step,
+			};
+		}
+
+		const currentResult: SingleResult = {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 0,
+			messages: [],
+			stderr: "",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			model: effectiveModel,
+			step,
+		};
+
+		const emitUpdate = () => {
+			if (onUpdate) {
+				onUpdate({
+					content: [{ type: "text", text: getFinalOutput(currentResult.messages) || "(running...)" }],
+					details: makeDetails([currentResult]),
+				});
+			}
+		};
+
+		args.push(task);
+		let wasAborted = false;
+
+		const exitCode = await new Promise<number>((resolve) => {
+			const invocation = getClaudeInvocation(args);
+			const childEnv = buildChildEnv(depthCheck.currentDepth, depthCheck.effectiveMaxDepth, agent.maxSubagentDepth);
+			const proc = spawn(invocation.command, invocation.args, {
+				cwd: cwd ?? defaultCwd,
+				shell: false,
+				stdio: ["ignore", "pipe", "pipe"],
+				env: {
+					...process.env,
+					...childEnv,
+				},
+			});
+			let buffer = "";
+
+			const processLine = (line: string) => {
+				if (!line.trim()) return;
+				let event: any;
+				try {
+					event = JSON.parse(line);
+				} catch {
+					return;
+				}
+
+				if (event.type === "result") {
+					const claudeResult = parseClaudeResult(event);
+					currentResult.usage = claudeResult.usage;
+					if (claudeResult.model) currentResult.model = claudeResult.model;
+					if (claudeResult.error) currentResult.errorMessage = claudeResult.error;
+					if (claudeResult.exitCode !== 0) currentResult.stopReason = "error";
+
+					// Push a synthetic assistant message so getFinalOutput() can extract text
+					if (claudeResult.finalOutput) {
+						currentResult.messages.push({
+							role: "assistant",
+							content: [{ type: "text", text: claudeResult.finalOutput }],
+							model: claudeResult.model ?? "",
+							usage: {
+								input: claudeResult.usage.input,
+								output: claudeResult.usage.output,
+								cacheRead: claudeResult.usage.cacheRead,
+								cacheWrite: claudeResult.usage.cacheWrite,
+								totalTokens: claudeResult.usage.contextTokens,
+								cost: { total: claudeResult.usage.cost },
+							},
+							stopReason: claudeResult.error ? "error" : "endTurn",
+							timestamp: Date.now(),
+						} as Message);
+					}
+					emitUpdate();
+				} else {
+					const message = parseClaudeStreamEvent(event);
+					if (message) {
+						currentResult.messages.push(message as Message);
+						emitUpdate();
+					}
+				}
+			};
+
+			proc.stdout.on("data", (data: Buffer) => {
+				buffer += data.toString();
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+				for (const line of lines) processLine(line);
+			});
+
+			proc.stderr.on("data", (data: Buffer) => {
+				currentResult.stderr += data.toString();
+			});
+
+			proc.on("close", (code) => {
+				if (buffer.trim()) processLine(buffer);
+				resolve(code ?? 0);
+			});
+
+			proc.on("error", (error) => {
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+					currentResult.stderr = "Claude Code CLI not found. Install it or set dispatch to 'pi'.";
+				} else {
+					currentResult.stderr = error instanceof Error ? error.message : String(error);
+				}
+				resolve(1);
+			});
+
+			if (signal) {
+				const killProc = () => {
+					wasAborted = true;
+					proc.kill("SIGTERM");
+					setTimeout(() => {
+						if (!proc.killed) proc.kill("SIGKILL");
+					}, 5000);
+				};
+				if (signal.aborted) killProc();
+				else signal.addEventListener("abort", killProc, { once: true });
+			}
+		});
+
+		currentResult.exitCode = exitCode;
+		if (wasAborted) throw new Error("Subagent was aborted");
+		return currentResult;
+	}
+
+	// --- Pi dispatch path (default) ---
 	const { args, effectiveModel, error: argsError } = buildAgentArgs({
 		agentModel: agent.model,
 		agentThinking: agent.thinking,
@@ -452,12 +639,15 @@ async function runSingleAgentWithFallback(
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
 	modelOverride?: string,
 	thinkingOverride?: string,
+	dispatch?: string,
+	permissionMode?: string,
 ): Promise<SingleResult> {
 	const agent = agents.find((a) => a.name === agentName);
 	return withModelFallback(
 		(overrideModel) => runSingleAgent(
 			defaultCwd, agents, agentName, task, cwd, step, signal, onUpdate, makeDetails,
 			overrideModel ?? modelOverride, thinkingOverride,
+			dispatch, permissionMode,
 		),
 		agent?.fallbackModels,
 	);
