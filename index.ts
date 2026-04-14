@@ -24,7 +24,7 @@ import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 import { checkDepth, buildChildEnv } from "./depth-guard.js";
-import { isRetryableError, withModelFallback } from "./model-fallback.js";
+import { withModelFallback } from "./model-fallback.js";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
