@@ -64,6 +64,19 @@ describe("model-fallback", () => {
 			assert.equal(isRetryableError("FetchFailed: connection reset"), true);
 		});
 
+		it("detects transient auth errors", () => {
+			assert.equal(isRetryableError("auth token expired, please reauthenticate"), true);
+			assert.equal(isRetryableError("401 temporarily unavailable"), true);
+			assert.equal(isRetryableError("unauthorized, please retry later"), true);
+		});
+
+		it("does NOT retry permanent auth failures", () => {
+			assert.equal(isRetryableError("invalid API key"), false);
+			assert.equal(isRetryableError("invalid_api_key"), false);
+			assert.equal(isRetryableError("unauthorized"), false);
+			assert.equal(isRetryableError("401 Unauthorized"), false);
+		});
+
 		it("returns false for non-retryable errors", () => {
 			assert.equal(isRetryableError("invalid API key"), false);
 			assert.equal(isRetryableError("model not found"), false);

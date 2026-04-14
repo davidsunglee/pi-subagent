@@ -81,6 +81,9 @@ export function isRetryableError(stderr: string, errorMessage?: string, stopReas
 		/socket hang up/i,
 		/network.?error/i,
 		/fetch.?failed/i,
+		/unauthorized.*retry/i,
+		/401.*temporarily/i,
+		/auth.*token.*expired/i,
 	];
 
 	const errorText = [stderr, errorMessage, stopReason].filter(Boolean).join(" ");
