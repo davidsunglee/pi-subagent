@@ -15,7 +15,7 @@ export const PI_TO_CLAUDE_TOOLS: Record<string, string> = {
 	bash: "Bash",
 	grep: "Grep",
 	find: "Glob",
-	ls: "Bash",
+	ls: "Glob",
 };
 
 /** Map pi thinking levels to Claude Code --effort values */
@@ -151,7 +151,7 @@ export function parseClaudeStreamEvent(event: Record<string, unknown>): unknown 
 				...message,
 				content: (message.content as Array<Record<string, unknown>>).map((block) => {
 					if (block.type === "tool_use") {
-						return { type: "toolCall", id: block.id, name: block.name, arguments: block.input };
+						return { type: "toolCall", id: block.id, name: (block.name as string)?.toLowerCase(), arguments: block.input };
 					}
 					return block;
 				}),

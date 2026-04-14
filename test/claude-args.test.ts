@@ -198,11 +198,19 @@ describe("claude-args", () => {
 			assert.deepEqual(tools, ["Grep", "Read"]);
 		});
 
-		it("deduplicates tools that map to the same Claude tool", () => {
+		it("maps bash and ls to separate Claude tools (Bash and Glob)", () => {
 			const { args } = buildClaudeArgs({ agentTools: ["bash", "ls"] });
 			const idx = args.indexOf("--allowedTools");
 			assert.ok(idx >= 0, "should include --allowedTools flag");
-			assert.equal(args[idx + 1], "Bash");
+			const tools = args[idx + 1].split(",").sort();
+			assert.deepEqual(tools, ["Bash", "Glob"]);
+		});
+
+		it("deduplicates find and ls which both map to Glob", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["find", "ls"] });
+			const idx = args.indexOf("--allowedTools");
+			assert.ok(idx >= 0, "should include --allowedTools flag");
+			assert.equal(args[idx + 1], "Glob");
 		});
 
 		it("omits --allowedTools when agentTools is undefined", () => {
@@ -300,7 +308,7 @@ describe("claude-args", () => {
 			assert.equal(PI_TO_CLAUDE_TOOLS["bash"], "Bash");
 			assert.equal(PI_TO_CLAUDE_TOOLS["grep"], "Grep");
 			assert.equal(PI_TO_CLAUDE_TOOLS["find"], "Glob");
-			assert.equal(PI_TO_CLAUDE_TOOLS["ls"], "Bash");
+			assert.equal(PI_TO_CLAUDE_TOOLS["ls"], "Glob");
 		});
 	});
 
@@ -320,7 +328,7 @@ describe("claude-args", () => {
 			assert.deepEqual((result.content as unknown[])[0], { type: "text", text: "Hello" });
 		});
 
-		it("transforms tool_use content blocks to toolCall format", () => {
+		it("transforms tool_use content blocks to toolCall format with lowercased name", () => {
 			const event = {
 				type: "assistant",
 				message: {
@@ -343,7 +351,7 @@ describe("claude-args", () => {
 			assert.equal(content.length, 1);
 			assert.equal(content[0].type, "toolCall");
 			assert.equal(content[0].id, "toolu_abc123");
-			assert.equal(content[0].name, "Bash");
+			assert.equal(content[0].name, "bash");
 			assert.deepEqual(content[0].arguments, { command: "ls -la" });
 		});
 
@@ -371,10 +379,10 @@ describe("claude-args", () => {
 			assert.equal(content.length, 2);
 			// text block passes through unchanged
 			assert.deepEqual(content[0], { type: "text", text: "Let me check that for you." });
-			// tool_use block transformed to toolCall
+			// tool_use block transformed to toolCall with lowercased name
 			assert.equal(content[1].type, "toolCall");
 			assert.equal(content[1].id, "toolu_xyz789");
-			assert.equal(content[1].name, "Read");
+			assert.equal(content[1].name, "read");
 			assert.deepEqual(content[1].arguments, { file_path: "/tmp/test.ts" });
 		});
 
@@ -406,9 +414,9 @@ describe("claude-args", () => {
 			assert.equal(content.length, 2);
 			// unknown type passes through
 			assert.deepEqual(content[0], { type: "thinking", thinking: "hmm..." });
-			// tool_use is transformed
+			// tool_use is transformed with lowercased name
 			assert.equal(content[1].type, "toolCall");
-			assert.equal(content[1].name, "Grep");
+			assert.equal(content[1].name, "grep");
 			assert.deepEqual(content[1].arguments, { pattern: "foo" });
 		});
 
