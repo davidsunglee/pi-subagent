@@ -153,6 +153,7 @@ interface SingleResult {
 	model?: string;
 	stopReason?: string;
 	errorMessage?: string;
+	modelAttempts?: import("./model-fallback.js").FallbackAttempt[];
 	step?: number;
 }
 

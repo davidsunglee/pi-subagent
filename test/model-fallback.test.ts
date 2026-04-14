@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { isRetryableError, withModelFallback } from "../model-fallback.ts";
-import type { FallbackResult } from "../model-fallback.ts";
+import type { FallbackResult, FallbackAttempt } from "../model-fallback.ts";
 
 describe("model-fallback", () => {
 	describe("isRetryableError", () => {
@@ -190,6 +190,65 @@ describe("model-fallback", () => {
 			assert.equal(result.exitCode, 1);
 			assert.equal(result.stderr, "invalid API key"); // non-retryable error from fallback-1
 			assert.deepEqual(calls, [undefined, "fallback-1"]); // fallback-2 not tried
+		});
+
+		it("populates modelAttempts on success (single attempt)", async () => {
+			const result = await withModelFallback(
+				async (model) => success(model),
+				["fallback-1"],
+			);
+			assert.ok(result.modelAttempts);
+			assert.equal(result.modelAttempts!.length, 1);
+			assert.deepEqual(result.modelAttempts![0], {
+				model: undefined,
+				failed: false,
+				retryable: false,
+			});
+		});
+
+		it("populates modelAttempts on fallback (multiple attempts)", async () => {
+			const result = await withModelFallback(
+				async (model) => {
+					return model === "fallback-1" ? success(model) : retryableError(model);
+				},
+				["fallback-1", "fallback-2"],
+			);
+			assert.ok(result.modelAttempts);
+			assert.equal(result.modelAttempts!.length, 2);
+			assert.deepEqual(result.modelAttempts![0], {
+				model: undefined,
+				failed: true,
+				retryable: true,
+			});
+			assert.deepEqual(result.modelAttempts![1], {
+				model: "fallback-1",
+				failed: false,
+				retryable: false,
+			});
+		});
+
+		it("populates modelAttempts when all fallbacks exhausted", async () => {
+			const result = await withModelFallback(
+				async (model) => retryableError(model),
+				["fallback-1", "fallback-2"],
+			);
+			assert.ok(result.modelAttempts);
+			assert.equal(result.modelAttempts!.length, 3);
+			assert.deepEqual(result.modelAttempts![0], {
+				model: undefined,
+				failed: true,
+				retryable: true,
+			});
+			assert.deepEqual(result.modelAttempts![1], {
+				model: "fallback-1",
+				failed: true,
+				retryable: true,
+			});
+			assert.deepEqual(result.modelAttempts![2], {
+				model: "fallback-2",
+				failed: true,
+				retryable: true,
+			});
 		});
 	});
 });
