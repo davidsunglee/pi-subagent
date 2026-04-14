@@ -7,6 +7,7 @@ import {
 	buildClaudeArgs,
 	parseClaudeStreamEvent,
 	parseClaudeResult,
+	PI_TO_CLAUDE_TOOLS,
 } from "../claude-args.ts";
 
 describe("claude-args", () => {
@@ -188,10 +189,43 @@ describe("claude-args", () => {
 			assert.ok(!args.includes("--effort"));
 		});
 
-		it("ignores agentTools (Claude has all tools built in)", () => {
-			const { args } = buildClaudeArgs({ agentTools: ["read", "grep", "bash"] });
-			assert.ok(!args.includes("--tools"));
-			assert.ok(!args.includes("read,grep,bash"));
+		it("maps agentTools to --allowedTools with Claude tool names", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["read", "grep"] });
+			const idx = args.indexOf("--allowedTools");
+			assert.ok(idx >= 0, "should include --allowedTools flag");
+			const toolsValue = args[idx + 1];
+			const tools = toolsValue.split(",").sort();
+			assert.deepEqual(tools, ["Grep", "Read"]);
+		});
+
+		it("deduplicates tools that map to the same Claude tool", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["bash", "ls"] });
+			const idx = args.indexOf("--allowedTools");
+			assert.ok(idx >= 0, "should include --allowedTools flag");
+			assert.equal(args[idx + 1], "Bash");
+		});
+
+		it("omits --allowedTools when agentTools is undefined", () => {
+			const { args } = buildClaudeArgs({});
+			assert.ok(!args.includes("--allowedTools"));
+		});
+
+		it("omits --allowedTools when agentTools is empty", () => {
+			const { args } = buildClaudeArgs({ agentTools: [] });
+			assert.ok(!args.includes("--allowedTools"));
+		});
+
+		it("skips unknown tool names but still maps known ones", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["read", "unknown_tool", "edit"] });
+			const idx = args.indexOf("--allowedTools");
+			assert.ok(idx >= 0, "should include --allowedTools flag");
+			const tools = args[idx + 1].split(",").sort();
+			assert.deepEqual(tools, ["Edit", "Read"]);
+		});
+
+		it("omits --allowedTools when all tool names are unknown", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["foo", "bar", "baz"] });
+			assert.ok(!args.includes("--allowedTools"));
 		});
 
 		it("defaults permission mode to bypassPermissions", () => {
@@ -253,7 +287,20 @@ describe("claude-args", () => {
 				"--model", "claude-sonnet-4-6",
 				"--effort", "max",
 				"--system-prompt", "Be concise.",
+				"--allowedTools", "Read,Bash",
 			]);
+		});
+	});
+
+	describe("PI_TO_CLAUDE_TOOLS", () => {
+		it("is exported and maps expected pi tool names", () => {
+			assert.equal(PI_TO_CLAUDE_TOOLS["read"], "Read");
+			assert.equal(PI_TO_CLAUDE_TOOLS["write"], "Write");
+			assert.equal(PI_TO_CLAUDE_TOOLS["edit"], "Edit");
+			assert.equal(PI_TO_CLAUDE_TOOLS["bash"], "Bash");
+			assert.equal(PI_TO_CLAUDE_TOOLS["grep"], "Grep");
+			assert.equal(PI_TO_CLAUDE_TOOLS["find"], "Glob");
+			assert.equal(PI_TO_CLAUDE_TOOLS["ls"], "Bash");
 		});
 	});
 

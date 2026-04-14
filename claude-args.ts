@@ -7,6 +7,17 @@ import { isValidThinkingLevel } from "./agent-args.ts";
 const VALID_DISPATCHES = new Set(["pi", "claude"]);
 const VALID_PERMISSION_MODES = new Set(["bypassPermissions", "auto", "plan"]);
 
+/** Map pi tool names to Claude Code --allowedTools names */
+export const PI_TO_CLAUDE_TOOLS: Record<string, string> = {
+	read: "Read",
+	write: "Write",
+	edit: "Edit",
+	bash: "Bash",
+	grep: "Grep",
+	find: "Glob",
+	ls: "Bash",
+};
+
 /** Map pi thinking levels to Claude Code --effort values */
 const THINKING_TO_EFFORT: Record<string, string> = {
 	off: "low",
@@ -112,7 +123,17 @@ export function buildClaudeArgs(input: BuildClaudeArgsInput): BuildClaudeArgsRes
 		args.push("--system-prompt", input.systemPrompt);
 	}
 
-	// agentTools is intentionally ignored — Claude Code has all tools built in
+	// Map pi tool restrictions to Claude Code --allowedTools
+	if (input.agentTools && input.agentTools.length > 0) {
+		const claudeTools = new Set<string>();
+		for (const piTool of input.agentTools) {
+			const mapped = PI_TO_CLAUDE_TOOLS[piTool.toLowerCase()];
+			if (mapped) claudeTools.add(mapped);
+		}
+		if (claudeTools.size > 0) {
+			args.push("--allowedTools", [...claudeTools].join(","));
+		}
+	}
 
 	return { args, effectiveModel };
 }
