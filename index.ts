@@ -435,8 +435,17 @@ async function runSingleAgent(
 				currentResult.stderr += data.toString();
 			});
 
+			const onAbort = () => {
+				wasAborted = true;
+				proc.kill("SIGTERM");
+				setTimeout(() => {
+					if (!proc.killed) proc.kill("SIGKILL");
+				}, 5000);
+			};
+
 			proc.on("close", (code) => {
 				if (buffer.trim()) processLine(buffer);
+				if (signal) signal.removeEventListener("abort", onAbort);
 				resolve(code ?? 0);
 			});
 
@@ -450,15 +459,8 @@ async function runSingleAgent(
 			});
 
 			if (signal) {
-				const killProc = () => {
-					wasAborted = true;
-					proc.kill("SIGTERM");
-					setTimeout(() => {
-						if (!proc.killed) proc.kill("SIGKILL");
-					}, 5000);
-				};
-				if (signal.aborted) killProc();
-				else signal.addEventListener("abort", killProc, { once: true });
+				if (signal.aborted) onAbort();
+				else signal.addEventListener("abort", onAbort, { once: true });
 			}
 		});
 
@@ -586,8 +588,17 @@ async function runSingleAgent(
 				currentResult.stderr += data.toString();
 			});
 
+			const onAbort = () => {
+				wasAborted = true;
+				proc.kill("SIGTERM");
+				setTimeout(() => {
+					if (!proc.killed) proc.kill("SIGKILL");
+				}, 5000);
+			};
+
 			proc.on("close", (code) => {
 				if (buffer.trim()) processLine(buffer);
+				if (signal) signal.removeEventListener("abort", onAbort);
 				resolve(code ?? 0);
 			});
 
@@ -596,15 +607,8 @@ async function runSingleAgent(
 			});
 
 			if (signal) {
-				const killProc = () => {
-					wasAborted = true;
-					proc.kill("SIGTERM");
-					setTimeout(() => {
-						if (!proc.killed) proc.kill("SIGKILL");
-					}, 5000);
-				};
-				if (signal.aborted) killProc();
-				else signal.addEventListener("abort", killProc, { once: true });
+				if (signal.aborted) onAbort();
+				else signal.addEventListener("abort", onAbort, { once: true });
 			}
 		});
 

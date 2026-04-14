@@ -547,6 +547,21 @@ describe("claude-args", () => {
 			assert.equal(result.usage.contextTokens, 1000 + 200 + 300 + 150);
 		});
 
+		it("handles null result gracefully", () => {
+			const json = {
+				type: "result",
+				subtype: "success",
+				is_error: false,
+				result: null,
+				total_cost_usd: 0,
+				num_turns: 0,
+				usage: {},
+			};
+			const result = parseClaudeResult(json as any);
+			assert.equal(result.finalOutput, "");
+			assert.equal(result.exitCode, 0);
+		});
+
 		it("handles missing usage object", () => {
 			const json = {
 				type: "result",

@@ -181,7 +181,7 @@ export function parseClaudeResult(json: Record<string, unknown>): ClaudeResult {
 
 	return {
 		exitCode: hasError ? 1 : 0,
-		finalOutput: json.result as string,
+		finalOutput: (json.result as string) || "",
 		usage: {
 			input,
 			output,
