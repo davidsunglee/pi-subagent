@@ -60,6 +60,12 @@ export function isRetryableError(stderr: string, errorMessage?: string, stopReas
 		/429/,
 		/quota/i,
 		/temporarily.?unavailable/i,
+		/ECONNRESET/,
+		/ETIMEDOUT/,
+		/ECONNREFUSED/,
+		/socket hang up/i,
+		/network.?error/i,
+		/fetch.?failed/i,
 	];
 
 	const errorText = [stderr, errorMessage, stopReason].filter(Boolean).join(" ");

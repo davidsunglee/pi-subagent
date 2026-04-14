@@ -37,6 +37,33 @@ describe("model-fallback", () => {
 			assert.equal(isRetryableError("model temporarily unavailable"), true);
 		});
 
+		it("detects ECONNRESET", () => {
+			assert.equal(isRetryableError("Error: read ECONNRESET"), true);
+		});
+
+		it("detects ETIMEDOUT", () => {
+			assert.equal(isRetryableError("connect ETIMEDOUT 1.2.3.4:443"), true);
+		});
+
+		it("detects ECONNREFUSED", () => {
+			assert.equal(isRetryableError("connect ECONNREFUSED 127.0.0.1:8080"), true);
+		});
+
+		it("detects socket hang up", () => {
+			assert.equal(isRetryableError("socket hang up"), true);
+			assert.equal(isRetryableError("Socket Hang Up"), true);
+		});
+
+		it("detects network error", () => {
+			assert.equal(isRetryableError("NetworkError when attempting to fetch"), true);
+			assert.equal(isRetryableError("network error occurred"), true);
+		});
+
+		it("detects fetch failed", () => {
+			assert.equal(isRetryableError("TypeError: fetch failed"), true);
+			assert.equal(isRetryableError("FetchFailed: connection reset"), true);
+		});
+
 		it("returns false for non-retryable errors", () => {
 			assert.equal(isRetryableError("invalid API key"), false);
 			assert.equal(isRetryableError("model not found"), false);
