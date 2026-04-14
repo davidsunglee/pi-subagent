@@ -23,6 +23,7 @@ import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@mar
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
+import { checkDepth, buildChildEnv } from "./depth-guard.js";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -263,6 +264,20 @@ async function runSingleAgent(
 		};
 	}
 
+	const depthCheck = checkDepth(agentName, agent.maxSubagentDepth);
+	if (!depthCheck.allowed) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: depthCheck.errorMessage!,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
+
 	const args: string[] = ["--mode", "json", "-p", "--no-session"];
 
 	// Resolution order: tool call override > agent frontmatter > pi default
@@ -310,10 +325,15 @@ async function runSingleAgent(
 
 		const exitCode = await new Promise<number>((resolve) => {
 			const invocation = getPiInvocation(args);
+			const childEnv = buildChildEnv(depthCheck.currentDepth, depthCheck.effectiveMaxDepth);
 			const proc = spawn(invocation.command, invocation.args, {
 				cwd: cwd ?? defaultCwd,
 				shell: false,
 				stdio: ["ignore", "pipe", "pipe"],
+				env: {
+					...process.env,
+					...childEnv,
+				},
 			});
 			let buffer = "";
 
