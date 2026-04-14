@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildAgentArgs } from "../agent-args.ts";
+import { buildAgentArgs, isValidThinkingLevel } from "../agent-args.ts";
 
 describe("agent-args", () => {
 	describe("buildAgentArgs", () => {
@@ -85,6 +85,47 @@ describe("agent-args", () => {
 				"--thinking", "medium",
 				"--tools", "read,bash",
 			]);
+		});
+
+		it("throws on invalid thinking level", () => {
+			assert.throws(
+				() => buildAgentArgs({ agentThinking: "superduper" }),
+				(err: Error) => {
+					assert.ok(err.message.includes('Invalid thinking level'));
+					assert.ok(err.message.includes('"superduper"'));
+					return true;
+				},
+			);
+		});
+
+		it("throws on empty-string thinking level", () => {
+			// Empty string is falsy so it won't reach validation — should not throw
+			const { args } = buildAgentArgs({ agentThinking: "" });
+			assert.ok(!args.includes("--thinking"));
+		});
+
+		it("accepts all valid thinking levels", () => {
+			for (const level of ["off", "minimal", "low", "medium", "high", "xhigh"]) {
+				const { args, effectiveThinking } = buildAgentArgs({ agentThinking: level });
+				assert.ok(args.includes("--thinking"));
+				assert.ok(args.includes(level));
+				assert.equal(effectiveThinking, level);
+			}
+		});
+	});
+
+	describe("isValidThinkingLevel", () => {
+		it("returns true for valid levels", () => {
+			for (const level of ["off", "minimal", "low", "medium", "high", "xhigh"]) {
+				assert.equal(isValidThinkingLevel(level), true, `Expected "${level}" to be valid`);
+			}
+		});
+
+		it("returns false for invalid levels", () => {
+			assert.equal(isValidThinkingLevel("superduper"), false);
+			assert.equal(isValidThinkingLevel("MAX"), false);
+			assert.equal(isValidThinkingLevel(""), false);
+			assert.equal(isValidThinkingLevel("High"), false); // case-sensitive
 		});
 	});
 });
