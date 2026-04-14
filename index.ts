@@ -24,7 +24,7 @@ import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 import { checkDepth, buildChildEnv } from "./depth-guard.js";
-import { isRetryableError } from "./model-fallback.js";
+import { isRetryableError, withModelFallback } from "./model-fallback.js";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -440,36 +440,14 @@ async function runSingleAgentWithFallback(
 	modelOverride?: string,
 	thinkingOverride?: string,
 ): Promise<SingleResult> {
-	const result = await runSingleAgent(
-		defaultCwd, agents, agentName, task, cwd, step, signal, onUpdate, makeDetails,
-		modelOverride, thinkingOverride,
-	);
-
-	// Only attempt fallback if the primary model failed with a retryable error
-	if (result.exitCode === 0 && result.stopReason !== "error") return result;
-	if (!isRetryableError(result.stderr, result.errorMessage, result.stopReason)) return result;
-
 	const agent = agents.find((a) => a.name === agentName);
-	if (!agent?.fallbackModels || agent.fallbackModels.length === 0) return result;
-
-	// Try each fallback model in order
-	for (const fallbackModel of agent.fallbackModels) {
-		const fallbackResult = await runSingleAgent(
+	return withModelFallback(
+		(overrideModel) => runSingleAgent(
 			defaultCwd, agents, agentName, task, cwd, step, signal, onUpdate, makeDetails,
-			fallbackModel, thinkingOverride,
-		);
-
-		if (fallbackResult.exitCode === 0 && fallbackResult.stopReason !== "error") {
-			return fallbackResult;
-		}
-
-		if (!isRetryableError(fallbackResult.stderr, fallbackResult.errorMessage, fallbackResult.stopReason)) {
-			return fallbackResult;
-		}
-	}
-
-	// All fallbacks exhausted — return the original error
-	return result;
+			overrideModel ?? modelOverride, thinkingOverride,
+		),
+		agent?.fallbackModels,
+	);
 }
 
 const TaskItem = Type.Object({
