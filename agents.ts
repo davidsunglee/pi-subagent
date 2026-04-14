@@ -27,7 +27,7 @@ export interface AgentDiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project" | "builtin"): AgentConfig[] {
+export function loadAgentsFromDir(dir: string, source: "user" | "project" | "builtin"): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 
 	if (!fs.existsSync(dir)) {
@@ -111,7 +111,7 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
 	}
 }
 
-function getBuiltinAgentsDir(): string {
+export function getBuiltinAgentsDir(): string {
 	const thisFile = fileURLToPath(import.meta.url);
 	return path.join(path.dirname(thisFile), "agents");
 }
