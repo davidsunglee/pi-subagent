@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { getAgentDir, parseFrontmatter } from "@mariozechner/pi-coding-agent";
 
 export type AgentScope = "user" | "project" | "both";
@@ -13,8 +14,11 @@ export interface AgentConfig {
 	description: string;
 	tools?: string[];
 	model?: string;
+	thinking?: string;
+	maxSubagentDepth?: number;
+	fallbackModels?: string[];
 	systemPrompt: string;
-	source: "user" | "project";
+	source: "user" | "project" | "builtin";
 	filePath: string;
 }
 
@@ -23,7 +27,7 @@ export interface AgentDiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
+function loadAgentsFromDir(dir: string, source: "user" | "project" | "builtin"): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 
 	if (!fs.existsSync(dir)) {
@@ -60,11 +64,24 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 			.map((t: string) => t.trim())
 			.filter(Boolean);
 
+		const thinking = frontmatter.thinking?.trim() || undefined;
+		const rawMaxDepth = frontmatter.maxSubagentDepth !== undefined
+			? parseInt(frontmatter.maxSubagentDepth, 10)
+			: undefined;
+		const maxSubagentDepth = rawMaxDepth !== undefined && !Number.isNaN(rawMaxDepth) ? rawMaxDepth : undefined;
+		const fallbackModels = frontmatter.fallbackModels
+			?.split(",")
+			.map((m: string) => m.trim())
+			.filter(Boolean);
+
 		agents.push({
 			name: frontmatter.name,
 			description: frontmatter.description,
 			tools: tools && tools.length > 0 ? tools : undefined,
 			model: frontmatter.model,
+			thinking,
+			maxSubagentDepth,
+			fallbackModels: fallbackModels && fallbackModels.length > 0 ? fallbackModels : undefined,
 			systemPrompt: body,
 			source,
 			filePath,
@@ -94,14 +111,24 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
 	}
 }
 
+function getBuiltinAgentsDir(): string {
+	const thisFile = fileURLToPath(import.meta.url);
+	return path.join(path.dirname(thisFile), "agents");
+}
+
 export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+	const builtinDir = getBuiltinAgentsDir();
 	const userDir = path.join(getAgentDir(), "agents");
 	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
 
+	const builtinAgents = loadAgentsFromDir(builtinDir, "builtin");
 	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
 	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
 
+	// Priority: builtin (lowest) -> user -> project (highest)
 	const agentMap = new Map<string, AgentConfig>();
+
+	for (const agent of builtinAgents) agentMap.set(agent.name, agent);
 
 	if (scope === "both") {
 		for (const agent of userAgents) agentMap.set(agent.name, agent);

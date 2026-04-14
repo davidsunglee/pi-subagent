@@ -141,7 +141,7 @@ interface UsageStats {
 
 interface SingleResult {
 	agent: string;
-	agentSource: "user" | "project" | "unknown";
+	agentSource: "user" | "project" | "builtin" | "unknown";
 	task: string;
 	exitCode: number;
 	messages: Message[];
