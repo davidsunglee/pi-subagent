@@ -266,7 +266,7 @@ async function runSingleAgent(
 		};
 	}
 
-	const depthCheck = checkDepth(agentName, agent.maxSubagentDepth);
+	const depthCheck = checkDepth(agentName);
 	if (!depthCheck.allowed) {
 		return {
 			agent: agentName,
@@ -325,7 +325,7 @@ async function runSingleAgent(
 
 		const exitCode = await new Promise<number>((resolve) => {
 			const invocation = getPiInvocation(args);
-			const childEnv = buildChildEnv(depthCheck.currentDepth, depthCheck.effectiveMaxDepth);
+			const childEnv = buildChildEnv(depthCheck.currentDepth, depthCheck.effectiveMaxDepth, agent.maxSubagentDepth);
 			const proc = spawn(invocation.command, invocation.args, {
 				cwd: cwd ?? defaultCwd,
 				shell: false,

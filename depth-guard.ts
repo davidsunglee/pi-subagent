@@ -1,6 +1,12 @@
 /**
  * Recursion depth guard for subagent nesting
+ *
+ * The depth guard checks the PARENT's limits (from env vars), not the child
+ * agent's frontmatter config. An agent's `maxSubagentDepth` controls how deep
+ * IT can dispatch, not whether it can be launched.
  */
+
+const DEFAULT_MAX_DEPTH = 2;
 
 export interface DepthCheckResult {
 	allowed: boolean;
@@ -17,42 +23,56 @@ export function getCurrentDepth(): number {
 }
 
 /**
- * Compute the effective max depth: agent limit cannot relax parent limit
+ * Get the parent's max depth from env, with a finite default.
  */
-export function getEffectiveMaxDepth(agentMaxDepth: number | undefined, parentMaxDepth?: number): number {
-	const agentLimit = agentMaxDepth ?? Infinity;
-	const parentLimit = parentMaxDepth ?? Infinity;
-	return Math.min(agentLimit, parentLimit);
+export function getParentMaxDepth(): number {
+	const raw = process.env.PI_SUBAGENT_MAX_DEPTH;
+	if (raw === undefined) return DEFAULT_MAX_DEPTH;
+	const parsed = parseInt(raw, 10);
+	return Number.isFinite(parsed) ? parsed : DEFAULT_MAX_DEPTH;
 }
 
 /**
- * Check whether a subagent dispatch is allowed at the current depth
+ * Check if the current process is allowed to spawn a subagent.
+ * This checks the PARENT's limits, not the child agent's.
  */
-export function checkDepth(agentName: string, agentMaxDepth: number | undefined): DepthCheckResult {
+export function checkDepth(agentName: string): DepthCheckResult {
 	const currentDepth = getCurrentDepth();
-	const parentMaxDepth = process.env.PI_SUBAGENT_MAX_DEPTH
-		? parseInt(process.env.PI_SUBAGENT_MAX_DEPTH, 10)
-		: undefined;
-	const effectiveMaxDepth = getEffectiveMaxDepth(agentMaxDepth, parentMaxDepth);
+	const maxDepth = getParentMaxDepth();
 
-	if (currentDepth >= effectiveMaxDepth) {
+	if (currentDepth >= maxDepth) {
 		return {
 			allowed: false,
 			currentDepth,
-			effectiveMaxDepth,
-			errorMessage: `Subagent depth limit reached (current depth: ${currentDepth}, max: ${effectiveMaxDepth}). Agent "${agentName}" cannot spawn subagents at this depth.`,
+			effectiveMaxDepth: maxDepth,
+			errorMessage: `Subagent depth limit reached (current depth: ${currentDepth}, max: ${maxDepth}). Agent "${agentName}" cannot be spawned at this depth.`,
 		};
 	}
 
-	return { allowed: true, currentDepth, effectiveMaxDepth };
+	return { allowed: true, currentDepth, effectiveMaxDepth: maxDepth };
 }
 
 /**
- * Build env vars for a child subagent process
+ * Build env vars for a child subagent process.
+ * The child's maxSubagentDepth controls how deep IT can go (relative to its own depth).
+ * Convert to absolute: childDepth + agentMaxSubagentDepth.
+ * Clamp: never relax the parent's limit.
  */
-export function buildChildEnv(currentDepth: number, effectiveMaxDepth: number): Record<string, string> {
+export function buildChildEnv(
+	currentDepth: number,
+	parentMaxDepth: number,
+	agentMaxSubagentDepth: number | undefined,
+): Record<string, string> {
+	const childDepth = currentDepth + 1;
+	// Convert agent's relative limit to absolute
+	const childAbsoluteLimit = agentMaxSubagentDepth !== undefined
+		? childDepth + agentMaxSubagentDepth
+		: parentMaxDepth; // inherit parent's limit if unspecified
+	// Cannot relax parent's limit
+	const childMaxDepth = Math.min(childAbsoluteLimit, parentMaxDepth);
+
 	return {
-		PI_SUBAGENT_DEPTH: String(currentDepth + 1),
-		PI_SUBAGENT_MAX_DEPTH: String(effectiveMaxDepth),
+		PI_SUBAGENT_DEPTH: String(childDepth),
+		PI_SUBAGENT_MAX_DEPTH: String(childMaxDepth),
 	};
 }
