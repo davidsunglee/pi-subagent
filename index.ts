@@ -659,12 +659,16 @@ const TaskItem = Type.Object({
 	model: Type.Optional(Type.String({ description: "Model override (takes precedence over agent frontmatter)" })),
 	thinking: Type.Optional(Type.String({ description: "Thinking level override: off, minimal, low, medium, high, xhigh" })),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	dispatch: Type.Optional(Type.String({ description: 'CLI to spawn: "pi" (default) or "claude"' })),
+	permissionMode: Type.Optional(Type.String({ description: 'Claude Code permission mode' })),
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	dispatch: Type.Optional(Type.String({ description: 'CLI to spawn: "pi" (default) or "claude"' })),
+	permissionMode: Type.Optional(Type.String({ description: 'Claude Code permission mode' })),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -684,6 +688,8 @@ const SubagentParams = Type.Object({
 		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
 	),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
+	dispatch: Type.Optional(Type.String({ description: 'CLI to spawn: "pi" (default) or "claude"' })),
+	permissionMode: Type.Optional(Type.String({ description: 'Claude Code permission mode: "bypassPermissions" (default), "auto", or "plan"' })),
 });
 
 export default function (pi: ExtensionAPI) {
@@ -695,6 +701,7 @@ export default function (pi: ExtensionAPI) {
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
 			'Default agent scope is "user" (from ~/.pi/agent/agents).',
 			'To enable project-local agents in .pi/agents, set agentScope: "both" (or "project").',
+			'Set dispatch: "claude" to run via Claude Code CLI instead of pi.',
 		].join(" "),
 		parameters: SubagentParams,
 
@@ -789,6 +796,9 @@ export default function (pi: ExtensionAPI) {
 						signal,
 						chainUpdate,
 						makeDetails("chain"),
+						undefined, undefined,  // chain doesn't support per-step model/thinking override
+						step.dispatch || params.dispatch,
+						step.permissionMode || params.permissionMode,
 					);
 					results.push(result);
 
@@ -871,6 +881,8 @@ export default function (pi: ExtensionAPI) {
 						makeDetails("parallel"),
 						t.model,
 						t.thinking,
+						t.dispatch || params.dispatch,
+						t.permissionMode || params.permissionMode,
 					);
 					allResults[index] = result;
 					emitParallelUpdate();
@@ -907,6 +919,8 @@ export default function (pi: ExtensionAPI) {
 					makeDetails("single"),
 					params.model,
 					params.thinking,
+					params.dispatch,
+					params.permissionMode,
 				);
 				const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 				if (isError) {
