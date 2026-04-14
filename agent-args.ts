@@ -20,6 +20,7 @@ export interface AgentArgsResult {
 	args: string[];
 	effectiveModel?: string;
 	effectiveThinking?: string;
+	error?: string;
 }
 
 /**
@@ -35,7 +36,12 @@ export function buildAgentArgs(input: AgentArgsInput): AgentArgsResult {
 	if (effectiveModel) args.push("--model", effectiveModel);
 	if (effectiveThinking) {
 		if (!isValidThinkingLevel(effectiveThinking)) {
-			throw new Error(`Invalid thinking level: "${effectiveThinking}". Valid values: ${[...VALID_THINKING_LEVELS].join(", ")}`);
+			return {
+				args: [],
+				effectiveModel,
+				effectiveThinking,
+				error: `Invalid thinking level: "${effectiveThinking}". Valid values: ${[...VALID_THINKING_LEVELS].join(", ")}`,
+			};
 		}
 		args.push("--thinking", effectiveThinking);
 	}

@@ -87,15 +87,23 @@ describe("agent-args", () => {
 			]);
 		});
 
-		it("throws on invalid thinking level", () => {
-			assert.throws(
-				() => buildAgentArgs({ agentThinking: "superduper" }),
-				(err: Error) => {
-					assert.ok(err.message.includes('Invalid thinking level'));
-					assert.ok(err.message.includes('"superduper"'));
-					return true;
-				},
-			);
+		it("returns error field for invalid thinking level", () => {
+			const result = buildAgentArgs({ agentThinking: "superduper" });
+			assert.ok(result.error);
+			assert.ok(result.error!.includes('Invalid thinking level'));
+			assert.ok(result.error!.includes('"superduper"'));
+		});
+
+		it("returns empty args array on validation error", () => {
+			const result = buildAgentArgs({ agentThinking: "superduper" });
+			assert.deepEqual(result.args, []);
+		});
+
+		it("returns effectiveModel and effectiveThinking on validation error", () => {
+			const result = buildAgentArgs({ agentModel: "claude-opus-4-6", agentThinking: "superduper" });
+			assert.equal(result.effectiveModel, "claude-opus-4-6");
+			assert.equal(result.effectiveThinking, "superduper");
+			assert.ok(result.error);
 		});
 
 		it("throws on empty-string thinking level", () => {

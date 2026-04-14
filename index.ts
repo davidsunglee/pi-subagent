@@ -281,13 +281,26 @@ async function runSingleAgent(
 		};
 	}
 
-	const { args, effectiveModel } = buildAgentArgs({
+	const { args, effectiveModel, error: argsError } = buildAgentArgs({
 		agentModel: agent.model,
 		agentThinking: agent.thinking,
 		agentTools: agent.tools,
 		modelOverride,
 		thinkingOverride,
 	});
+
+	if (argsError) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: argsError,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			step,
+		};
+	}
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
