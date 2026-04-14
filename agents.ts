@@ -27,6 +27,8 @@ export interface AgentDiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
+const VALID_THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
+
 export function loadAgentsFromDir(dir: string, source: "user" | "project" | "builtin"): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 
@@ -64,7 +66,8 @@ export function loadAgentsFromDir(dir: string, source: "user" | "project" | "bui
 			.map((t: string) => t.trim())
 			.filter(Boolean);
 
-		const thinking = frontmatter.thinking?.trim() || undefined;
+		const rawThinking = frontmatter.thinking?.trim() || undefined;
+		const thinking = rawThinking && VALID_THINKING_LEVELS.has(rawThinking) ? rawThinking : undefined;
 		const rawMaxDepth = frontmatter.maxSubagentDepth !== undefined
 			? parseInt(frontmatter.maxSubagentDepth, 10)
 			: undefined;

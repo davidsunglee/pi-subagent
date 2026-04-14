@@ -55,6 +55,45 @@ describe("agents", () => {
 			assert.equal(agents[0].thinking, "high");
 		});
 
+		it("drops invalid thinking value from frontmatter", () => {
+			fs.writeFileSync(path.join(tmpDir, "bad-thinking.md"), [
+				"---",
+				"name: bad-thinking",
+				"description: Invalid thinking",
+				"thinking: superduper",
+				"---",
+				"",
+				"Body.",
+			].join("\n"));
+
+			const agents = loadAgentsFromDir(tmpDir, "user");
+			assert.equal(agents[0].thinking, undefined);
+		});
+
+		it("preserves valid thinking values from frontmatter", () => {
+			const validLevels = ["off", "minimal", "low", "medium", "high", "xhigh"];
+			for (const level of validLevels) {
+				const filename = `thinking-${level}.md`;
+				fs.writeFileSync(path.join(tmpDir, filename), [
+					"---",
+					`name: thinking-${level}`,
+					`description: Thinking ${level}`,
+					`thinking: ${level}`,
+					"---",
+					"",
+					"Body.",
+				].join("\n"));
+			}
+
+			const agents = loadAgentsFromDir(tmpDir, "user");
+			assert.equal(agents.length, validLevels.length);
+			for (let i = 0; i < validLevels.length; i++) {
+				const agent = agents.find(a => a.name === `thinking-${validLevels[i]}`);
+				assert.ok(agent, `Expected agent for thinking level "${validLevels[i]}"`);
+				assert.equal(agent!.thinking, validLevels[i]);
+			}
+		});
+
 		it("parses maxSubagentDepth as integer", () => {
 			fs.writeFileSync(path.join(tmpDir, "shallow.md"), [
 				"---",
