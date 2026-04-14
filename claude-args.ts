@@ -120,9 +120,23 @@ export function buildClaudeArgs(input: BuildClaudeArgsInput): BuildClaudeArgsRes
 /**
  * Parse an intermediate Claude Code stream-json event.
  * Returns the assistant message object for "assistant" events, undefined otherwise.
+ * Transforms Claude's tool_use content blocks to pi-compatible toolCall format.
  */
 export function parseClaudeStreamEvent(event: Record<string, unknown>): unknown | undefined {
 	if (event.type === "assistant") {
+		const message = event.message as Record<string, unknown> | undefined;
+		if (message && Array.isArray(message.content)) {
+			const transformed = {
+				...message,
+				content: (message.content as Array<Record<string, unknown>>).map((block) => {
+					if (block.type === "tool_use") {
+						return { type: "toolCall", id: block.id, name: block.name, arguments: block.input };
+					}
+					return block;
+				}),
+			};
+			return transformed;
+		}
 		return event.message;
 	}
 	return undefined;

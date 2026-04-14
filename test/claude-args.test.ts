@@ -258,7 +258,7 @@ describe("claude-args", () => {
 	});
 
 	describe("parseClaudeStreamEvent", () => {
-		it("returns message object for assistant event", () => {
+		it("returns message object for assistant event with text content", () => {
 			const event = {
 				type: "assistant",
 				message: {
@@ -268,8 +268,101 @@ describe("claude-args", () => {
 					stop_reason: "end_turn",
 				},
 			};
+			const result = parseClaudeStreamEvent(event) as Record<string, unknown>;
+			assert.ok(result);
+			assert.deepEqual((result.content as unknown[])[0], { type: "text", text: "Hello" });
+		});
+
+		it("transforms tool_use content blocks to toolCall format", () => {
+			const event = {
+				type: "assistant",
+				message: {
+					content: [
+						{
+							type: "tool_use",
+							id: "toolu_abc123",
+							name: "Bash",
+							input: { command: "ls -la" },
+						},
+					],
+					model: "claude-opus-4-6",
+					usage: { input_tokens: 10, output_tokens: 5 },
+					stop_reason: "tool_use",
+				},
+			};
+			const result = parseClaudeStreamEvent(event) as Record<string, unknown>;
+			assert.ok(result);
+			const content = result.content as Array<Record<string, unknown>>;
+			assert.equal(content.length, 1);
+			assert.equal(content[0].type, "toolCall");
+			assert.equal(content[0].id, "toolu_abc123");
+			assert.equal(content[0].name, "Bash");
+			assert.deepEqual(content[0].arguments, { command: "ls -la" });
+		});
+
+		it("handles mixed content with text and tool_use blocks", () => {
+			const event = {
+				type: "assistant",
+				message: {
+					content: [
+						{ type: "text", text: "Let me check that for you." },
+						{
+							type: "tool_use",
+							id: "toolu_xyz789",
+							name: "Read",
+							input: { file_path: "/tmp/test.ts" },
+						},
+					],
+					model: "claude-opus-4-6",
+					usage: { input_tokens: 20, output_tokens: 15 },
+					stop_reason: "tool_use",
+				},
+			};
+			const result = parseClaudeStreamEvent(event) as Record<string, unknown>;
+			assert.ok(result);
+			const content = result.content as Array<Record<string, unknown>>;
+			assert.equal(content.length, 2);
+			// text block passes through unchanged
+			assert.deepEqual(content[0], { type: "text", text: "Let me check that for you." });
+			// tool_use block transformed to toolCall
+			assert.equal(content[1].type, "toolCall");
+			assert.equal(content[1].id, "toolu_xyz789");
+			assert.equal(content[1].name, "Read");
+			assert.deepEqual(content[1].arguments, { file_path: "/tmp/test.ts" });
+		});
+
+		it("passes through message without content array unchanged", () => {
+			const event = {
+				type: "assistant",
+				message: {
+					model: "claude-opus-4-6",
+					usage: { input_tokens: 10, output_tokens: 5 },
+				},
+			};
 			const result = parseClaudeStreamEvent(event);
 			assert.deepEqual(result, event.message);
+		});
+
+		it("passes through unknown content block types unchanged", () => {
+			const event = {
+				type: "assistant",
+				message: {
+					content: [
+						{ type: "thinking", thinking: "hmm..." },
+						{ type: "tool_use", id: "toolu_1", name: "Grep", input: { pattern: "foo" } },
+					],
+				},
+			};
+			const result = parseClaudeStreamEvent(event) as Record<string, unknown>;
+			assert.ok(result);
+			const content = result.content as Array<Record<string, unknown>>;
+			assert.equal(content.length, 2);
+			// unknown type passes through
+			assert.deepEqual(content[0], { type: "thinking", thinking: "hmm..." });
+			// tool_use is transformed
+			assert.equal(content[1].type, "toolCall");
+			assert.equal(content[1].name, "Grep");
+			assert.deepEqual(content[1].arguments, { pattern: "foo" });
 		});
 
 		it("returns undefined for system event", () => {
