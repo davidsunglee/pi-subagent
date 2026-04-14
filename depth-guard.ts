@@ -19,7 +19,10 @@ export interface DepthCheckResult {
  * Parse the current subagent depth from environment
  */
 export function getCurrentDepth(): number {
-	return parseInt(process.env.PI_SUBAGENT_DEPTH || "0", 10);
+	const raw = process.env.PI_SUBAGENT_DEPTH;
+	if (raw === undefined) return 0;
+	const parsed = parseInt(raw, 10);
+	return Number.isFinite(parsed) ? parsed : 0;
 }
 
 /**

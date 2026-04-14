@@ -23,6 +23,21 @@ describe("depth-guard", () => {
 			process.env.PI_SUBAGENT_DEPTH = "2";
 			assert.equal(getCurrentDepth(), 2);
 		});
+
+		it("returns 0 for Infinity env value", () => {
+			process.env.PI_SUBAGENT_DEPTH = "Infinity";
+			assert.equal(getCurrentDepth(), 0);
+		});
+
+		it("returns 0 for NaN env value", () => {
+			process.env.PI_SUBAGENT_DEPTH = "NaN";
+			assert.equal(getCurrentDepth(), 0);
+		});
+
+		it("returns 0 for non-numeric env value", () => {
+			process.env.PI_SUBAGENT_DEPTH = "abc";
+			assert.equal(getCurrentDepth(), 0);
+		});
 	});
 
 	describe("getParentMaxDepth", () => {
