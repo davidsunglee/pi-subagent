@@ -23,6 +23,7 @@ import { type ExtensionAPI, getMarkdownTheme, withFileMutationQueue } from "@mar
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
+import { buildAgentArgs } from "./agent-args.js";
 import { checkDepth, buildChildEnv } from "./depth-guard.js";
 import { withModelFallback } from "./model-fallback.js";
 
@@ -279,15 +280,13 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
-
-	// Resolution order: tool call override > agent frontmatter > pi default
-	const effectiveModel = modelOverride ?? agent.model;
-	const effectiveThinking = thinkingOverride ?? agent.thinking;
-
-	if (effectiveModel) args.push("--model", effectiveModel);
-	if (effectiveThinking) args.push("--thinking", effectiveThinking);
-	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	const { args, effectiveModel } = buildAgentArgs({
+		agentModel: agent.model,
+		agentThinking: agent.thinking,
+		agentTools: agent.tools,
+		modelOverride,
+		thinkingOverride,
+	});
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
