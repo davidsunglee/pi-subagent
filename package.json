@@ -1,0 +1,36 @@
+{
+  "name": "@davidsunglee/pi-subagent",
+  "version": "0.1.0",
+  "description": "Minimal subagent extension for pi coding agent — single, parallel, and chain dispatch",
+  "author": "David Lee",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidsunglee/pi-subagent.git"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "subagent"
+  ],
+  "files": [
+    "*.ts",
+    "agents/",
+    "prompts/",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-agent-core": "*",
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  }
+}
