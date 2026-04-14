@@ -341,7 +341,7 @@ describe("claude-args", () => {
 			const result = parseClaudeResult(json);
 			assert.equal(result.exitCode, 1);
 			assert.equal(result.finalOutput, "Ran out of turns");
-			assert.equal(result.error, "error_max_turns");
+			assert.equal(result.error, "Ran out of turns");
 			assert.equal(result.model, undefined);
 		});
 
@@ -360,7 +360,7 @@ describe("claude-args", () => {
 			};
 			const result = parseClaudeResult(json);
 			assert.equal(result.exitCode, 1);
-			assert.equal(result.error, "error_tool");
+			assert.equal(result.error, "Tool failed");
 		});
 
 		it("handles missing usage fields gracefully", () => {
@@ -380,7 +380,7 @@ describe("claude-args", () => {
 			assert.equal(result.usage.cacheWrite, 0);
 		});
 
-		it("computes contextTokens as input + cacheRead + cacheWrite", () => {
+		it("computes contextTokens as input + output + cacheRead + cacheWrite", () => {
 			const json = {
 				type: "result",
 				subtype: "success",
@@ -396,7 +396,7 @@ describe("claude-args", () => {
 				},
 			};
 			const result = parseClaudeResult(json);
-			assert.equal(result.usage.contextTokens, 1000 + 300 + 150);
+			assert.equal(result.usage.contextTokens, 1000 + 200 + 300 + 150);
 		});
 
 		it("handles missing usage object", () => {

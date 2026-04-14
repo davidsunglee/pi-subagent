@@ -153,10 +153,10 @@ export function parseClaudeResult(json: Record<string, unknown>): ClaudeResult {
 			cacheRead,
 			cacheWrite,
 			cost,
-			contextTokens: input + cacheRead + cacheWrite,
+			contextTokens: input + output + cacheRead + cacheWrite,
 			turns,
 		},
-		error: hasError ? (subtype ?? "unknown_error") : undefined,
+		error: hasError ? ((json.result as string) || subtype || "unknown_error") : undefined,
 		model: json.model as string | undefined,
 	};
 }
