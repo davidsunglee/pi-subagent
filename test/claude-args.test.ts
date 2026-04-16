@@ -298,6 +298,33 @@ describe("claude-args", () => {
 				"--allowedTools", "Read,Bash",
 			]);
 		});
+
+		it("appends task separated by -- so variadic --allowedTools does not consume it", () => {
+			// Regression: claude CLI declares --allowedTools as variadic (<tools...>).
+			// If task is pushed directly after --allowedTools, commander consumes it
+			// as another tool name and --print sees no prompt argument.
+			const { args } = buildClaudeArgs({
+				agentTools: ["read", "bash"],
+				task: "Write a plan for X.",
+			});
+			const toolsIdx = args.indexOf("--allowedTools");
+			const sepIdx = args.lastIndexOf("--");
+			const taskIdx = args.indexOf("Write a plan for X.");
+			assert.ok(toolsIdx >= 0, "expected --allowedTools in args");
+			assert.ok(sepIdx > toolsIdx, "expected -- separator after --allowedTools");
+			assert.equal(taskIdx, sepIdx + 1, "expected task immediately after --");
+			assert.equal(args.length - 1, taskIdx, "expected task to be the final arg");
+		});
+
+		it("omits task and separator when task is not provided", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["read"] });
+			assert.ok(!args.includes("--"), "should not emit -- when no task");
+		});
+
+		it("omits separator for empty-string task (treated as no task)", () => {
+			const { args } = buildClaudeArgs({ agentTools: ["read"], task: "" });
+			assert.ok(!args.includes("--"), "empty task should not emit -- separator");
+		});
 	});
 
 	describe("PI_TO_CLAUDE_TOOLS", () => {

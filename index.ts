@@ -328,6 +328,7 @@ async function runSingleAgent(
 			thinkingOverride,
 			permissionMode: effectivePermissionMode,
 			systemPrompt: agent.systemPrompt.trim() || undefined,
+			task,
 		});
 
 		if (argsError) {
@@ -364,7 +365,6 @@ async function runSingleAgent(
 			}
 		};
 
-		args.push(task);
 		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {

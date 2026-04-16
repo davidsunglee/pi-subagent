@@ -53,6 +53,7 @@ export interface BuildClaudeArgsInput {
 	thinkingOverride?: string;
 	permissionMode?: string;
 	systemPrompt?: string;
+	task?: string;
 }
 
 export interface BuildClaudeArgsResult {
@@ -133,6 +134,12 @@ export function buildClaudeArgs(input: BuildClaudeArgsInput): BuildClaudeArgsRes
 		if (claudeTools.size > 0) {
 			args.push("--allowedTools", [...claudeTools].join(","));
 		}
+	}
+
+	// Separator guards the task from variadic options like --allowedTools <tools...>,
+	// which otherwise consume the following positional as another tool name.
+	if (input.task) {
+		args.push("--", input.task);
 	}
 
 	return { args, effectiveModel };
