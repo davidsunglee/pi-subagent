@@ -225,7 +225,8 @@ async function writePromptToTempFile(agentName: string, prompt: string): Promise
 
 function getPiInvocation(args: string[]): { command: string; args: string[] } {
 	const currentScript = process.argv[1];
-	if (currentScript && fs.existsSync(currentScript)) {
+	const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
+	if (currentScript && !isBunVirtualScript && fs.existsSync(currentScript)) {
 		return { command: process.execPath, args: [currentScript, ...args] };
 	}
 
@@ -723,12 +724,12 @@ export default function (pi: ExtensionAPI) {
 
 			const makeDetails =
 				(mode: "single" | "parallel" | "chain") =>
-				(results: SingleResult[]): SubagentDetails => ({
-					mode,
-					agentScope,
-					projectAgentsDir: discovery.projectAgentsDir,
-					results,
-				});
+					(results: SingleResult[]): SubagentDetails => ({
+						mode,
+						agentScope,
+						projectAgentsDir: discovery.projectAgentsDir,
+						results,
+					});
 
 			if (modeCount !== 1) {
 				const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
@@ -779,16 +780,16 @@ export default function (pi: ExtensionAPI) {
 					// Create update callback that includes all previous results
 					const chainUpdate: OnUpdateCallback | undefined = onUpdate
 						? (partial) => {
-								// Combine completed results with current streaming result
-								const currentResult = partial.details?.results[0];
-								if (currentResult) {
-									const allResults = [...results, currentResult];
-									onUpdate({
-										content: partial.content,
-										details: makeDetails("chain")(allResults),
-									});
-								}
+							// Combine completed results with current streaming result
+							const currentResult = partial.details?.results[0];
+							if (currentResult) {
+								const allResults = [...results, currentResult];
+								onUpdate({
+									content: partial.content,
+									details: makeDetails("chain")(allResults),
+								});
 							}
+						}
 						: undefined;
 
 					const result = await runSingleAgentWithFallback(
@@ -1099,9 +1100,9 @@ export default function (pi: ExtensionAPI) {
 					container.addChild(
 						new Text(
 							icon +
-								" " +
-								theme.fg("toolTitle", theme.bold("chain ")) +
-								theme.fg("accent", `${successCount}/${details.results.length} steps`),
+							" " +
+							theme.fg("toolTitle", theme.bold("chain ")) +
+							theme.fg("accent", `${successCount}/${details.results.length} steps`),
 							0,
 							0,
 						),
